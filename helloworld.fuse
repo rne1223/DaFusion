@@ -1,0 +1,35 @@
+-- global variables
+fuseName = "HelloWorld" -- Name of the fuse
+debug = true -- Make logging messages appear on the Fusion terminal
+
+-- Needed to get register in Davinic Resolve Fusion (DaFusion)
+-- FUSE WILL NOT WORK WITHOUT IT
+FuRegisterClass(fuseName, CT_Tool, {
+    REGS_Category = "Fuses", -- Where is going to be located in the Effects Menu
+    REGS_OpIconString = "hel", -- Shortcut for the 'CTRl-Space' menu
+    REGS_OpDescription = "This is the hello world of Fuse" -- Description of the Fuse
+})
+
+-- simple debug function to display debug messages
+function log(msg)
+    if(debug) then
+        print(msg)
+    end
+end
+
+-- Called when 
+function Create()
+    log(fuseName.." Created() has been called")
+end
+
+function onAddToFlow()
+    log(fuseName.." onAddToFlow has been called")
+end
+
+function NotifyChanged()
+    log(fuseName.." NotifyChanged has been called")
+end
+
+function onConnected()
+    log(fuseName.." onConnected has been called")
+end
