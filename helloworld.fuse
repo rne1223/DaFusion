@@ -1,3 +1,19 @@
+--[[
+    Fuse Name: 
+        HelloWorld.Fuse
+    Description:
+        A simple helloworld fuse to learn how to create a fuse. Most of the work has been derived from 
+        Chris Ridings' youtube series https://www.youtube.com/playlist?list=PLMq0eVQ7s_TKtH6pp_94-BUaJghttm29Y.
+        For extra help go to WSL's VXFpedia website: https://www.steakunderwater.com/VFXPedia/96.0.243.189/index4875.html?title=Main_Page
+
+    Version:
+        Alpha 1.0
+    Date:
+        2/23/2021
+    Author:
+        rne1223
+--]]
+
 -- global variables
 fuseName = "HelloWorld" -- Name of the fuse
 debug = true -- Make logging messages appear on the Fusion terminal
@@ -10,26 +26,55 @@ FuRegisterClass(fuseName, CT_Tool, {
     REGS_OpDescription = "This is the hello world of Fuse" -- Description of the Fuse
 })
 
--- simple debug function to display debug messages
+-- Simple debug function to display log messages on Fusion Console
 function log(msg)
     if(debug) then
         print(msg)
     end
 end
 
--- Called when 
+
+--[[
+  __  __       _         ______                _   _                 
+ |  \/  |     (_)       |  ____|              | | (_)                
+ | \  / | __ _ _ _ __   | |__ _   _ _ __   ___| |_ _  ___  _ __  ___ 
+ | |\/| |/ _` | | '_ \  |  __| | | | '_ \ / __| __| |/ _ \| '_ \/ __|
+ | |  | | (_| | | | | | | |  | |_| | | | | (__| |_| | (_) | | | \__ \
+ |_|  |_|\__,_|_|_| |_| |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|___/
+                                                                     
+--]]
+
+-- Called everytime a node is created (due to the user adding it, reload, or  loading from file) 
+-- Usually use to create interface elements that go on the inspector
 function Create()
     log(fuseName.." Created() has been called")
+    Logging = self:AddInput("Logging", "Logging", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "CheckboxControl",
+		INP_Integer = true,
+		INP_Default = 1.0,
+    })	
 end
 
+-- Called after the node is created but before anything else
+-- Usually use to dynamically change things like parameters
 function onAddToFlow()
-    log(fuseName.." onAddToFlow has been called")
+    log("Fuse:"..fuseName.."- onAddToFlow has been called")
 end
 
+-- Called everytime Fusion thinks a parameter has changed or may have changed
 function NotifyChanged()
-    log(fuseName.." NotifyChanged has been called")
+    log("Fuse:"..fuseName.."- NotifyChanged has been called")
 end
 
+-- Called everytime an input on the node is connected in the flow 
+-- Or there is a change to the inputs upstream
+-- Or an input on the node
+-- Or an upstream node is disconnected
 function onConnected()
-    log(fuseName.." onConnected has been called")
+    log("Fuse:"..fuseName.."- onConnected has been called")
+end
+
+function Process()
+    log("Fuse:"..fuseName.."- Process() function is being called")
 end
