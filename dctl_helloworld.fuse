@@ -11,20 +11,23 @@ local FC_DEVELOP   = true         -- set to 'true' to display reload/edit button
 local FC_INFOBTN   = -1           -- show button to open the project page -1 on top, 0 hide, 1 on bottom
 local FC_PREFIX    = "RN"         -- use 'ST'(shadertoy) in the repo; to be replaced by 'BETA' for user downloads and by "" if it goes officially into the reactor
 local FC_SCPREFIX  = FC_PREFIX    -- prefix for shortcuts
-local FC_SUBMENU   = "Shadertoys" -- you may want to prepend e.g. "Fuses\\" to not have the Shadertoys on your 'Add tool...' toplevel menu
+local FC_SUBMENU   = "Fuses\\Dctl\\" -- you may want to prepend e.g. "Fuses\\" to not have the Shadertoys on your 'Add tool...' toplevel menu
+local FC_IN        = true         -- If you want the node to have an input
+local FC_OUT       = true         -- If you want the node to have an output 
+
 
 -- /* FUSE INFO
 local FUSE_NAME             = "DCTL_Helloworld"
 local FUSE_AUTHOR           = "rne1223"
 local FUSE_AUTHOR_URL       = "https://www.youtube.com/channel/UCIpzjRYPezZCIZeRT4R00Rw" 
-local FUSE_INFO_URL         = ""
+local FUSE_INFO_URL         = "https://github.com/rne1223/DaFusion"
 local FUSE_VERSION          = 1
-local FUSE_VERSION_DATE     = ""
+local FUSE_VERSION_DATE     = "2/24/2021"
 
 -- /*  SHADERTOY INFO
-local SHADERTOY_NAME       = "craziness"
-local SHADERTOY_AUTHOR     = "spsherk_"
-local SHADERTOY_ID         = "wdjSRc"
+local SHADERTOY_NAME       = ""
+local SHADERTOY_AUTHOR     = ""
+local SHADERTOY_ID         = ""
 local SHADERTOY_LICENSE    = ""
 
 
@@ -62,17 +65,11 @@ FuRegisterClass(
 -- // DCTL kernel parameters
 -- // ------------------------------------------------------------------------
 
-ST_CrazynessParams =
+--These are the parameters that we need access to in our kernel.
+solidParams =
 [[
-  float freq;
-  float r;
-  float g;
-  float b;
-  float a;
-  int   width;
-  int   height;
-  float iTime;
-  int   compOrder;
+  float color[4];
+  int srcCompOrder;
 ]]
 
 
@@ -81,151 +78,14 @@ ST_CrazynessParams =
 -- DCTL kernel implementation
 -- // ------------------------------------------------------------------------
 
-ST_CrazynessKernel =
-    [[
-
-
-#undef USE_NATIVE_METAL_IMPL
-#undef USE_NATIVE_CUDA_IMPL
-#undef USE_NATIVE_OPENCL_IMPL
-
-// 0 to use the generic implementations; 1 for Metal, OpenCL, Cuda specific code if existing
-
-#if 1
-  #if defined(DEVICE_IS_METAL)
-    #define USE_NATIVE_METAL_IMPL   1
-  #elif defined(DEVICE_IS_CUDA)
-    #define USE_NATIVE_CUDA_IMPL    1
-  #elif defined(DEVICE_IS_OPENCL)
-    #define USE_NATIVE_OPENCL_IMPL  1
-  #endif
-#endif
-
-
-#if defined(USE_NATIVE_METAL_IMPL)
-
-  #define swixy(V) (V).xy
-
-#else
-
-  #define swixy(V) to_float2((V).x,(V).y)
-
-#endif
-
-
-#if defined(USE_NATIVE_METAL_IMPL)
-  __DEVICE__ inline float length1f      ( float  x ) { return abs(x);    }
-  __DEVICE__ inline float length_float3 ( float3 v ) { return length(v); }
-#else
-  __DEVICE__ inline float length1f      ( float  x ) { return _fabs(x);                                 }
-  __DEVICE__ inline float length_float3 ( float3 v ) { return _sqrtf(v.x*v.x+v.y*v.y+v.z*v.z);          }
-#endif
-
-#if defined(USE_NATIVE_METAL_IMPL)
-
-  typedef float2x2 mat2;
-
-    __DEVICE__ inline mat2 to_mat2    ( float  a, float  b, float c, float d) { return mat2(a,b,c,d);       }
-
-    __DEVICE__ inline float2  prod_float2_mat2( float2 v, mat2   m )  { return v*m; }
-
-#else
-
-  typedef struct
-  {
-    float2 r0;
-    float2 r1;
-
-  } mat2;
-
-  __DEVICE__ inline mat2 to_mat2    ( float  a, float  b, float c, float d)  { mat2 t; t.r0.x = a; t.r0.y = b; t.r1.x = c; t.r1.y = d;         return t; }
-
-  __DEVICE__ inline float2 prod_float2_mat2( float2 v, mat2 m )
-  {
-    float2 t; t.x = v.x*m.r0.x + v.y*m.r0.y; t.y = v.x*m.r1.x + v.y*m.r1.y; return t;
-  }
-
-
-
-
-#endif // end of mat2 implementation
-
-
-//############################################################################
-// #define t iTime
-
-__DEVICE__ mat2 m(float a)
+solidKerel =
+[[
+__KERNEL__ void SolidKernel(__CONSTANTREF__ SolidParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
-  float c=_cosf(a), s=_sinf(a);
-  mat2 r=to_mat2(c,-s,s,c);
-  return r;
-}
-
-__DEVICE__ float map(float3 p,float t)
-{
-    float2 px=to_float2(p.x,p.y);
-    px = prod_float2_mat2(px, m(t*0.4f));
-    px = prod_float2_mat2(px, m(t*0.3f));
-    float3 q = p*2.0f+t;
-    p.x=px.x; p.y=px.y;
-    return length_float3( p + to_float3_s(sin(t*0.7f)) )*log(length(p)+1.0f) + sin(q.x+sin(q.z+sin(q.y)))*5.5f - 1.0f;
-}
-
-
-__KERNEL__ void ST_CrazynessKernel(
-    __CONSTANTREF__ ST_CrazynessParams*  params,
-    __TEXTURE2D__                  iChannel0,
-    __TEXTURE2D_WRITE__            dst
-    )
-{
-
   DEFINE_KERNEL_ITERATORS_XY(x, y);
-
-  if (x >= params->width || y >= params->height)
-    return;
-
-  // ----- Standard parameters
-  float2 fragCoord   = to_float2(x, y);
-  float2 iResolution = to_float2(params->width, params->height);
-  float  iTime       = params->iTime * params->freq;
-  float4 fragColor   = to_float4_s(0.0f);
-
-  float red          = params->r;
-  float green        = params->g;
-  float blue         = params->b;
-  float alpha        = params->a;
-
-  //##########################################################################
-
-// FORKED FROM Ether by nimitz (twitter: @stormoid)
-// https://www.shadertoy.com/view/MsjSW3
-
-
-	float2 p = swixy(fragCoord)/iResolution.y - to_float2(0.9f,0.5f);
-  float3 cl = to_float3_s(0.0f);
-  float d = 0.9f;
-
-  for(int i=0; i<=5; i++)
-  {
-
-    float3 px = to_float3(0.0f,0.0f,5.0f) + normalize(to_float3_aw(p, -1.0f))*d;
-    float rz = map(px,iTime);
-    float f =  clamp((rz - map(px+0.1f,iTime))*0.5f, -0.1f, 1.0f );
-//  float3 l = to_float3(0.1f,0.3f,0.4f) + to_float3(5.0f, 2.5f, 3.0f)*f;
-    float3 l = to_float3(red,green,blue) + to_float3(5.0f, 2.5f, 3.0f)*f;
-    cl = cl*l + (1.0f-smoothstep(0.0f, 2.5f, rz))*0.7f*l;
-    d += min(rz, 1.0f);
-	}
-  fragColor = to_float4_aw(cl, alpha);
-
-  //fragColor   = to_float4(0.0f,1.0f,0.0f,0.0f);
-
-  //##########################################################################
-
-  _tex2DVec4Write(dst, x, y, fragColor);
-
+  float4 col = to_float4_v(params->color);
+  _tex2DVec4Write(dst, x, y, col);
 }
-
 ]]
 
 
@@ -236,74 +96,62 @@ __KERNEL__ void ST_CrazynessKernel(
 
 function Create()
 
-  ----- In/Out
-  InImage1 = self:AddInput("Image", "Image", {
-    LINKID_DataType = "Image",
-    LINK_Main = 1,
-    INP_Required = false
-  })
-
-  OutImage = self:AddOutput("Output", "Output", {
-    LINKID_DataType = "Image",
-    LINK_Main = 1,
-  })
-
   ----- Inspector Panel Controls
-
-   InFreq = self:AddInput("Frequency", "Frequency", {
-    LINKID_DataType    = "Number",
-    INPID_InputControl = "SliderControl",
-    INP_Default        = 0.6,
-    INP_MinScale 	     = 0.0,
-    INP_MaxScale 	     = 10.0,
+  InColorR = self:AddInput("Red", "Red", {
+      ICS_Name            = "Color",
+      LINKID_DataType     = "Number",
+      INPID_InputControl  = "ColorControl",
+      INP_Default         = 0.0,
+      INP_MaxScale        = 1.0,
+      ICD_Center          = 1.0,
+      INP_DoNotifyChanged = true,
+      CLRC_ShowWheel      = true,
+      IC_ControlGroup     = 1,
+      IC_ControlID        = 0,
+      IC_Visible          = true,
+  })
+  InColorG = self:AddInput("Green", "Green", {
+      LINKID_DataType     = "Number",
+      INPID_InputControl  = "ColorControl",
+      INP_Default         = 0.5,
+      INP_DoNotifyChanged = true,
+      IC_ControlGroup     = 1,
+      IC_ControlID        = 1,
+  })
+  InColorB = self:AddInput("Blue", "Blue", {
+      LINKID_DataType     = "Number",
+      INPID_InputControl  = "ColorControl",
+      INP_Default         = 1.0,
+      INP_DoNotifyChanged = true,
+      IC_ControlGroup     = 1,
+      IC_ControlID        = 2,
+  })
+  InColorA = self:AddInput("Alpha", "Alpha", {
+      LINKID_DataType     = "Number",
+      INPID_InputControl  = "ColorControl",
+      INP_Default         = 1.0,
+      INP_DoNotifyChanged = true,
+      IC_ControlGroup     = 1,
+      IC_ControlID        = 3,
   })
 
-  self:BeginControlNest("Color", "Color", true, {})
+  ----- In/Out
+  if FC_IN then
+    InImage1 = self:AddInput("Image", "Image", {
+      LINKID_DataType = "Image",
+      LINK_Main = 1,
+      INP_Required = false
+    })
+  end
 
-  InR = self:AddInput("Red", "Red", {
-		LINKID_DataType = "Number",
-		INPID_InputControl = "ColorControl",
-		INP_MinScale = 0.0,
-		INP_MaxScale = 1.0,
-		INP_Default  = 0.1,
-		ICS_Name = "Color",
-		IC_ControlGroup = 1,
-		IC_ControlID = 0,
-	})
+  if FC_OUT then
+    OutImage = self:AddOutput("Output", "Output", {
+      LINKID_DataType = "Image",
+      LINK_Main = 1,
+    })
+  end
 
-	InG = self:AddInput("Green", "Green", {
-		LINKID_DataType = "Number",
-		INPID_InputControl = "ColorControl",
-		INP_MinScale = 0.0,
-		INP_MaxScale = 1.0,
-		INP_Default  = 0.3,
-		IC_ControlGroup = 1,
-		IC_ControlID = 1,
-	})
-
-	InB = self:AddInput("Blue", "Blue", {
-		LINKID_DataType = "Number",
-		INPID_InputControl = "ColorControl",
-		INP_MinScale = 0.0,
-		INP_MaxScale = 1.0,
-		INP_Default  = 0.4,
-		IC_ControlGroup = 1,
-		IC_ControlID = 2,
-	})
-
-	InA = self:AddInput("Global Alpha", "GlobalAlpha", {
-		LINKID_DataType = "Number",
-		INPID_InputControl = "ColorControl",
-		INP_MinScale = 0.0,
-		INP_MaxScale = 1.0,
-		INP_Default  = 1.0,
-		IC_ControlGroup = 1,
-		IC_ControlID = 3,
-	})
-
-  self:EndControlNest()
   ------ Information
-
   if FC_INFOBTN~=0 then
     InfoButton = self:AddInput("Info ...", "InfoButton", {
       LINKID_DataType = "Text",
@@ -313,7 +161,6 @@ function Create()
       IC_ControlPage = FC_INFOBTN,
     })
   end
-
 
   InShaderInfoBlock = self:AddInput(
       (FC_INFOBTN~=1 and "<hr />" or "")..[[Shadertoy <a href="https://www.shadertoy.com/view/]]..SHADERTOY_ID..[[" style="color:white; text-decoration:none; ">]]..SHADERTOY_NAME
@@ -350,6 +197,18 @@ end
 function Process(req)
 
     local framerate = self.Comp:GetPrefs("Comp.FrameFormat.Rate") -- get the frame rate of the comp set in the preferences
+    
+    local realwidth = Width;
+    local realheight = Height;
+
+    local img_aspect = Width / Height
+   
+    -- We'll handle proxy ourselves
+    -- Borrowed from Hexagon Tiles fuse and Bryan's Tapered Shapes fuse.
+    Width = Width / Scale
+    Height = Height / Scale
+    Scale = 1
+ 
 
     --This creates an image for us to work on.
     local imgattrs = {
@@ -391,7 +250,7 @@ function Process(req)
 
     -- Interface for running DCTL-Code
 
-    node = DVIPComputeNode(req, "ST_CrazynessKernel", ST_CrazynessKernel, "ST_CrazynessParams", ST_CrazynessParams)
+    node = DVIPComputeNode(req, "ST_CrazynessKernel", solidShader, "ST_CrazynessParams", solidParams)
 
 
     if not pcall(function ()  -- necessary to avoid memory leakage
@@ -406,7 +265,7 @@ function Process(req)
         params.iTime        = req.Time / framerate
         node:SetParamBlock(params)
     end) then
-        params              = node:GetParamBlock(ST_CrazynessParams)
+        params              = node:GetParamBlock(solidParams)
         params.freq         = InFreq:GetValue(req).Value
         params.r            = InR:GetValue(req).Value
         params.g            = InG:GetValue(req).Value
