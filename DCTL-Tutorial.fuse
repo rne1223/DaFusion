@@ -1,0 +1,211 @@
+--[[--
+DCTLTutorial
+
+This tutorial covers the conversion of a WebGL shader to DCTL and the embedding in a fuse
+
+The Shadertoy used:
+https://www.shadertoy.com/view/WlsfDl# Erstellt von soggymongoose am 2020-08-22
+
+  
+  Subjects:
+1) Overview
+2) Installation (working environment)
+3) Fuse overview (basics)
+3) WebGL code conversion
+4) Tests / error messages
+5) parameters
+6) gimmicks
+7) Outlook (script, library)
+8) Selection of suitable shader toys
+  
+--]] --
+
+--------------------------------
+-- Registry declaration
+
+local FC_DIR       = "C:\\ProgramData\\Blackmagic Design\\DaVinci Resolve\\Fusion\\Fuses\\examples\\dctl" -- Directory where the fuse is located
+
+FuRegisterClass("DCTL_Tutorial", CT_SourceTool, {
+  REGS_Category      = "Fuses",
+  REGS_OpIconString  = "DCTLTut",
+  REGS_OpDescription = "DCTL_Tutorial",
+
+  REG_NoObjMatCtrls      = true,
+  REG_NoMotionBlurCtrls  = true,
+
+  REG_Source_GlobalCtrls = true,
+  REG_Source_SizeCtrls   = true,
+  REG_Source_AspectCtrls = true,
+  REG_Source_DepthCtrls  = true,
+  REG_OpNoMask           = true,
+  REG_Fuse_NoEdit        = false,
+  REG_Fuse_NoReload      = false,
+
+  REG_TimeVariant        = true,
+
+  REGS_Company           = "JiPi",
+  REGS_URL               = "https://www.steakunderwater.com/wesuckless/",
+  REG_Version            = 000001,
+  })
+
+version = "DCTL-Tutorial - 21 Jan 2021"
+
+-----------------------------------
+-- Description of kernel parameters
+ 
+DCTLTutorialParams =
+[[
+  float freq;
+  int width;
+  int height;
+  float itime;
+  int compOrder;
+]]
+
+function readAll(fil)
+    file = FC_DIR.."\\"..file
+    local f = assert(io.open(file, "rb"))
+    local content = f:read("*all")
+    f:close()
+
+    return '#include "'..FC_DIR.."\\"..'ColorConversion.h" \n'..content
+end
+
+-- read shadertoy file into SolidKernel
+-- SolidKernel = readAll("shadertoys\\tmpKernel")
+-- source of kernel
+DCTLTutorialKernel = readAll("shadertoys\\DCTLTutorialKernel.frag")
+
+-------------------------------------------------------------------
+--       Create
+-------------------------------------------------------------------
+function Create()
+
+  --------------- DCTLTutorial ---------------
+  InSwitch = self:AddInput("Switch", "Switch", {
+    LINKID_DataType    = "Number",
+    INPID_InputControl = "CheckboxControl",
+	INP_Integer        = true,
+    INP_Default        = 0,
+  }) 
+
+ InParameter = self:AddInput("Parameter", "Parameter", {
+    LINKID_DataType = "Number",
+    INPID_InputControl = "SliderControl",
+    INP_Default        = 0.0,
+	INP_MinScale 	   = 0.0,
+	INP_MaxScale 	   = 1.0,
+    --INP_MinAllowed = -1.0,
+    --INP_MaxAllowed = 1.0,
+ })
+
+
+-- Show Version --
+ InLabel = self:AddInput(version, "version", {
+    LINKID_DataType    = "Text",
+    INPID_InputControl = "LabelControl",
+    INP_External       = false,
+    INP_Passive        = true,
+    ICD_Width          = 1,
+ })
+
+------------------- In/Out -----------------
+  InImage1 = self:AddInput("Image", "Image", {
+    LINKID_DataType = "Image",
+    LINK_Main = 1,
+    INP_Required = false
+  })
+
+  OutImage = self:AddOutput("Output", "Output", {
+    LINKID_DataType = "Image",
+    LINK_Main = 1,
+  })
+end 
+
+
+
+-------------------------------------------------------------------
+--       Process
+-------------------------------------------------------------------
+function Process(req)
+
+    local framerate = self.Comp:GetPrefs("Comp.FrameFormat.Rate") -- get the frame rate of the comp set in the preferences
+
+
+    --This creates an image for us to work on.
+    local imgattrs = {
+        IMG_Document = self.Comp,
+        { IMG_Channel = "Red", },
+        { IMG_Channel = "Green", },
+        { IMG_Channel = "Blue", },
+        { IMG_Channel = "Alpha", },
+        IMG_Width = Width,
+        IMG_Height = Height,
+        IMG_XScale = XAspect,
+        IMG_YScale = YAspect,
+        IMAT_OriginalWidth = realwidth,
+        IMAT_OriginalHeight = realheight,
+        IMG_Quality = not req:IsQuick(),
+        IMG_MotionBlurQuality = not req:IsNoMotionBlur(),
+        }
+   
+    if not req:IsStampOnly() then
+        imgattrs.IMG_ProxyScale = 1
+    end
+   
+    if SourceDepth ~= 0 then
+        imgattrs.IMG_Depth = SourceDepth
+    end
+    
+
+    -- Extern Texture or create a new one
+    if (InImage1:GetValue(req) ~= nil) then
+        src1 = InImage1:GetValue(req)
+    else
+        src1 = Image(imgattrs)
+        local p = Pixel({R=0,G=0,B=0,A=0}) -- Initial black Image to avoid see random picture from Memory
+        src1:Fill(p)
+    end
+
+    local dst = Image {IMG_Like = src1, IMG_DeferAlloc = true} -- create an Output Image
+
+
+    -- Interface for running DCTL-Code
+    node = DVIPComputeNode(req, "DCTLTutorialKernel", DCTLTutorialKernel, "DCTLTutorialParams", DCTLTutorialParams)
+
+    if not pcall(function ()  -- necessary to avoid memory leakage
+        
+        params.compOrder = src1:IsMask() and 1 or 15
+        params.width  = src1.DataWindow:Width()
+        params.height = src1.DataWindow:Height()
+        params.itime = req.Time / framerate
+    
+        node:SetParamBlock(params)
+    end) then
+        params = node:GetParamBlock(DCTLTutorialParams)
+
+        params.compOrder = src1:IsMask() and 1 or 15
+        params.width  = src1.DataWindow:Width()
+        params.height = src1.DataWindow:Height()
+        params.itime = req.Time / framerate
+    
+        node:SetParamBlock(params)
+    end
+
+    node:AddSampler("RowSampler", TEX_FILTER_MODE_LINEAR,TEX_ADDRESS_MODE_BORDER, TEX_NORMALIZED_COORDS_TRUE)
+
+    node:AddInput("iChannel0", src1)
+    node:AddOutput("dst", dst)
+
+    local success = node:RunSession(req)
+    if not success then
+        dst = nil
+        dump(node:GetErrorLog()) -- Errormessages from DCTL-Compiler
+    end
+
+    OutImage:Set(req, dst)
+end
+
+
+
+
