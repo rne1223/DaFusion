@@ -80,17 +80,7 @@ SolidParams =
 -- DCTL kernel implementation
 -- // ------------------------------------------------------------------------
 
--- SolidKernel =
--- [[
--- __KERNEL__ void SolidKernel(__CONSTANTREF__ SolidParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
--- {
---   DEFINE_KERNEL_ITERATORS_XY(x, y);
---   float4 col = to_float4_v(params->color);
---   _tex2DVec4Write(dst, x, y, col);
--- }
--- ]]
-
--- Read file in to a string
+-- Read shadertoy from disk 
 function readAll(file)
     file = FC_DIR.."\\"..file
     local f = assert(io.open(file, "rb"))
@@ -99,6 +89,7 @@ function readAll(file)
     return content
 end
 
+-- read shadertoy file into SolidKernel
 SolidKernel = readAll("shadertoys\\tmpKernel")
 
 -- // ------------------------------------------------------------------------

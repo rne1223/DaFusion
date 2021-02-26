@@ -1,0 +1,22 @@
+//############################################################################################################################
+__KERNEL__ void DCTLTutorialKernel(__CONSTANTREF__ DCTLTutorialParams *params, __TEXTURE2D__ iChannel0, __TEXTURE2D_WRITE__ dst)
+{
+  DEFINE_KERNEL_ITERATORS_XY(x, y);
+  //---------------------------------------
+  if (x < params->width && y < params->height) 
+  {
+  
+     //-----------------------
+     float2 fragCoord = to_float2(x, y); 
+     float2 iResolution = to_float2(params->width, params->height);
+     float ratio = (float)params->width/(float)params->height;
+     float itime=params->itime * params->freq;
+	 float4 fragColor = to_float4_s(0.0f);
+     //-----------------------
+    
+    float2 uv = (fragCoord) / iResolution;
+    fragColor = _tex2DVecN( iChannel0, uv.x, uv.y, 15);
+
+    _tex2DVec4Write(dst, x, y, fragColor);
+  }
+}

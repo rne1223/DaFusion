@@ -1,3 +1,4 @@
+// Kernel implementation
 __KERNEL__ void SolidKernel(__CONSTANTREF__ SolidParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
   DEFINE_KERNEL_ITERATORS_XY(x, y);
